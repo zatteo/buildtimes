@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import {
   Chart as ChartJS,
@@ -10,10 +10,11 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-  
+
 import 'chartjs-adapter-date-fns';
 
 import { Line } from 'react-chartjs-2';
+import { useDebounce } from './useDebounce'
 
 ChartJS.register(
   TimeScale,
@@ -27,17 +28,25 @@ ChartJS.register(
 
 const TravisBuildTimes = () => {
   const [buildTimes, setBuildTimes] = useState([]);
+  const [repositorySlug, setRepositorySlug] = useState('cozy/cozy-contacts');
+  const [travisToken, setTravisToken] = useState(process.env.REACT_APP_TRAVIS_TOKEN ?? '');
 
-  function handleSubmit(e) {
-    e.preventDefault();
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if(searchParams.has('repository')) {
+      setRepositorySlug(searchParams.get('repository'));
+    }
+    if(searchParams.has('travis-token')) {
+      setTravisToken(searchParams.get('travis-token'));
+    }
+  }, [])
 
-    const form = e.target;
-    const formData = new FormData(form);
-    const formJson = Object.fromEntries(formData.entries());
-    fetchBuildTimes(formJson);
-  }
+  const debouncedRepositorySlug = useDebounce(repositorySlug, {
+    delay: 500,
+    ignore: repositorySlug === ''
+  })
 
-  const fetchBuildTimes = async ({ repositorySlug, travisToken }) => {
+  const fetchBuildTimes = async ({ repositorySlug, travisToken } = {}) => {
     try {
       const encodedRepositorySlug = encodeURIComponent(repositorySlug);
 
@@ -70,6 +79,12 @@ const TravisBuildTimes = () => {
     }
   };
 
+  useEffect(() => {
+    if(debouncedRepositorySlug !== '' && travisToken !== '') {
+      fetchBuildTimes({ repositorySlug: debouncedRepositorySlug, travisToken });
+    }
+  }, [debouncedRepositorySlug, travisToken]);
+
   const chartData = {
     labels: buildTimes.map((build) => build.date),
     datasets: [
@@ -92,18 +107,29 @@ const TravisBuildTimes = () => {
     },
   };
 
+  const handleRepositoryChange = (e) => {
+    const value = e.target.value
+    setRepositorySlug(value);
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set('repository', value);
+    window.history.replaceState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
+  }
+
+  const handleTravisTokenChange = (e) => {
+    setTravisToken(e.target.value);
+  }
+
   return (
     <div>
       <h1>Travis Build Times</h1>
 
-      <form method="post" onSubmit={handleSubmit}>
+      <form method="post">
         <label>
-          Repository slug: <input name="repositorySlug" defaultValue="cozy/cozy-contacts" />
+          Repository slug: <input name="repositorySlug" value={repositorySlug} onChange={handleRepositoryChange} />
         </label>
         <label>
-          Travis token: <input name="travisToken" type="password" defaultValue={process.env.REACT_APP_TRAVIS_TOKEN} />
+          Travis token: <input name="travisToken" type="password" value={travisToken} onChange={handleTravisTokenChange} />
         </label>
-        <button type="submit">Submit form</button>
       </form>
 
       {buildTimes.length > 0 ? (
