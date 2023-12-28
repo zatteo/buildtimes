@@ -28,6 +28,7 @@ ChartJS.register(
 
 const TravisBuildTimes = () => {
   const [buildTimes, setBuildTimes] = useState([]);
+  const [fetchStatus, setFetchStatus] = useState('idle');
   const [repositorySlug, setRepositorySlug] = useState('cozy/cozy-contacts');
   const [travisToken, setTravisToken] = useState(process.env.REACT_APP_TRAVIS_TOKEN ?? '');
 
@@ -47,6 +48,8 @@ const TravisBuildTimes = () => {
   })
 
   const fetchBuildTimes = async ({ repositorySlug, travisToken } = {}) => {
+    setBuildTimes([]);
+    setFetchStatus('loading');
     try {
       const encodedRepositorySlug = encodeURIComponent(repositorySlug);
 
@@ -74,7 +77,9 @@ const TravisBuildTimes = () => {
       })).sort((a, b) => a.date - b.date);
 
       setBuildTimes(formattedBuildTimes);
+      setFetchStatus('loaded');
     } catch (error) {
+      setFetchStatus('failed');
       console.error('Error fetching build information:', error.message);
     }
   };
@@ -120,7 +125,7 @@ const TravisBuildTimes = () => {
   }
 
   return (
-    <div>
+    <div style={{ margin: '1rem' }}>
       <h1>Travis Build Times</h1>
 
       <form method="post">
@@ -132,13 +137,14 @@ const TravisBuildTimes = () => {
         </label>
       </form>
 
-      {buildTimes.length > 0 ? (
+      {fetchStatus === 'loading' ? <p>Waiting...</p> : null}
+      {fetchStatus === 'failed' ? <p style={{ color: 'red' }}>Failed to fetch build times</p> : null}
+
+      {fetchStatus === 'loaded' && buildTimes.length > 0 ? (
         <div>
           <Line data={chartData} options={chartOptions} />
         </div>
-      ) : (
-        <p>Waiting...</p>
-      )}
+      ) : null }
     </div>
   );
 };
